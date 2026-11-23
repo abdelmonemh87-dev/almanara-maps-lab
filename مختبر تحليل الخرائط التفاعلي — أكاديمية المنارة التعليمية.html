@@ -1,0 +1,1742 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>مختبر تحليل الخرائط التفاعلي — أكاديمية المنارة التعليمية</title>
+
+  <!-- خطوط عربية واضحة ومريحة للقراءة -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+
+  <!-- مكتبة Leaflet.js للخرائط الجغرافية وصور الأقمار الصناعية الحقيقية -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- مكتبة Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            manaraNavy: '#1B2A49',
+            manaraNavyDark: '#121D33',
+            manaraGold: '#C2562B',
+            manaraGoldLight: '#D96B3E',
+            manaraBg: '#F8F9FA',
+            manaraSand: '#FDFBF7',
+          },
+          fontFamily: {
+            sans: ['Cairo', 'Tajawal', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    body {
+      font-family: 'Cairo', 'Tajawal', sans-serif;
+      background-color: #F8F9FA;
+      color: #1B2A49;
+      overflow-x: hidden;
+    }
+
+    /* حاوية الخريطة الحقيقية */
+    #realMap {
+      width: 100%;
+      height: 390px;
+      background-color: #E7E0CE;
+      z-index: 1;
+      font-family: 'Cairo', sans-serif;
+    }
+
+    @media (min-width: 640px) {
+      #realMap {
+        height: 460px;
+      }
+    }
+
+    /* دبابيس الخريطة العربية النابضة */
+    .manara-pin-wrapper {
+      position: relative;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .manara-pin-pulse {
+      position: absolute;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background-color: rgba(194, 86, 43, 0.45);
+      animation: pinPulse 2s infinite ease-out;
+    }
+
+    .manara-pin-pulse.discovered {
+      background-color: rgba(27, 42, 73, 0.35);
+    }
+
+    .manara-pin-core {
+      position: relative;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background-color: #1B2A49;
+      border: 2.5px solid #C2562B;
+      color: #FFFFFF;
+      font-family: 'Cairo', sans-serif;
+      font-weight: 900;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+      transition: transform 0.2s ease, background-color 0.2s ease;
+    }
+
+    .manara-pin-core.discovered {
+      background-color: #C2562B;
+      border-color: #FFFFFF;
+    }
+
+    .manara-pin-core.active-pin {
+      transform: scale(1.24);
+      border-color: #FDE68A;
+      box-shadow: 0 0 0 4px rgba(194, 86, 43, 0.5);
+    }
+
+    @keyframes pinPulse {
+      0% { transform: scale(0.8); opacity: 0.95; }
+      75% { transform: scale(1.75); opacity: 0; }
+      100% { transform: scale(1.75); opacity: 0; }
+    }
+
+    /* تسميات عربية مختصرة جداً تظهر فقط عند التكبير لمنع التداخل تماماً */
+    .manara-zoom-label {
+      background-color: rgba(27, 42, 73, 0.92) !important;
+      color: #FFFFFF !important;
+      border: 1px solid #C2562B !important;
+      border-radius: 6px !important;
+      padding: 2px 6px !important;
+      font-family: 'Cairo', sans-serif !important;
+      font-weight: 700 !important;
+      font-size: 10.5px !important;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25) !important;
+      white-space: nowrap !important;
+      direction: rtl !important;
+      pointer-events: none !important;
+    }
+
+    .manara-zoom-label::before {
+      display: none !important;
+    }
+
+    /* تخصيص نافذة Popup بالعربية */
+    .leaflet-popup-content-wrapper {
+      border-radius: 14px !important;
+      border: 2px solid #1B2A49 !important;
+      font-family: 'Cairo', sans-serif !important;
+      direction: rtl !important;
+      text-align: right !important;
+    }
+
+    .leaflet-popup-content {
+      margin: 12px 14px !important;
+      line-height: 1.65 !important;
+    }
+
+    /* شريط التمرير الزمني */
+    input[type="range"].manara-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: #CBD5E1;
+      outline: none;
+    }
+
+    input[type="range"].manara-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #C2562B;
+      border: 3px solid #1B2A49;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    }
+
+    input[type="range"].manara-slider::-moz-range-thumb {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #C2562B;
+      border: 3px solid #1B2A49;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    }
+
+    .fade-in {
+      animation: fadeIn 0.28s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- الهيدر العلوي الإلزامي من سطرين فقط دون أي أسماء شخصية -->
+  <header class="bg-manaraNavy text-white shadow-lg border-b-4 border-manaraGold">
+    <div class="max-w-6xl mx-auto px-4 py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3.5 text-center sm:text-right">
+        <!-- شعار المنارة الملاحي -->
+        <div class="w-12 h-12 rounded-2xl bg-manaraGold/20 border-2 border-manaraGold flex items-center justify-center shrink-0">
+          <svg class="w-7 h-7 text-manaraGold" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L14 7H10L12 2Z" fill="#C2562B" />
+            <path d="M9 7H15L16 21H8L9 7Z" />
+            <path d="M5 21H19" stroke-linecap="round" />
+            <path d="M16 5L20 3M8 5L4 3" stroke-linecap="round" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-xl sm:text-2xl font-extrabold tracking-wide text-white">
+            أكاديمية المنارة التعليمية
+          </h1>
+          <p class="text-sm sm:text-base font-semibold text-amber-200 mt-0.5">
+            المنارة في التاريخ — مختبر تحليل الخرائط التفاعلي
+          </p>
+        </div>
+      </div>
+
+      <!-- زر إرشادات قراءة الخريطة -->
+      <button
+        id="toggleTipsBtn"
+        type="button"
+        class="px-4 py-2.5 rounded-xl bg-manaraGold hover:bg-manaraGoldLight text-white font-bold text-xs sm:text-sm shadow transition flex items-center gap-2 shrink-0"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+        </svg>
+        <span>خطوات المحقق لقراءة الخريطة</span>
+      </button>
+    </div>
+
+    <!-- درج الإرشادات المنهجية -->
+    <div id="tipsDrawer" class="hidden bg-manaraNavyDark border-t border-slate-700">
+      <div class="max-w-6xl mx-auto px-4 py-5">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm sm:text-base font-bold text-amber-300">
+            🧭 كيف تقرأ الخريطة التاريخية في الامتحان كالمحقق؟
+          </h2>
+          <button id="closeTipsBtn" type="button" class="text-slate-300 hover:text-white text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-800">
+            إغلاق ✕
+          </button>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div class="bg-slate-800/85 border border-slate-700 rounded-xl p-4">
+            <div class="font-extrabold text-manaraGold text-base mb-1">1. اقرأ الرموز والاتجاهات أولاً</div>
+            <p class="text-slate-200 leading-relaxed text-xs sm:text-sm">
+              حدد الاتجاهات الأربعة ومفتاح الخريطة والمسارات المائية والبرية قبل قراءة الاختيارات.
+            </p>
+          </div>
+          <div class="bg-slate-800/85 border border-slate-700 rounded-xl p-4">
+            <div class="font-extrabold text-manaraGold text-base mb-1">2. اربط التضاريس بالقرار</div>
+            <p class="text-slate-200 leading-relaxed text-xs sm:text-sm">
+              الجنادل والأودية الصحراوية والترع والمضايق تفسر لماذا اتُخذ القرار التجاري أو العسكري في هذا الموقع.
+            </p>
+          </div>
+          <div class="bg-slate-800/85 border border-slate-700 rounded-xl p-4">
+            <div class="font-extrabold text-manaraGold text-base mb-1">3. قارن بين «قبل» و«بعد»</div>
+            <p class="text-slate-200 leading-relaxed text-xs sm:text-sm">
+              أي تغير في مسار التجارة أو السيادة أو خطوط الزحف على الخريطة يعكس تحولاً استراتيجياً في ميزان القوة.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- المحتوى الرئيسي -->
+  <main class="flex-grow max-w-6xl w-full mx-auto px-4 py-6 space-y-6">
+
+    <!-- تبويبات المراحل الثانوية الثلاث -->
+    <section aria-label="اختيار المرحلة الدراسية" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-2">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-2" id="gradeTabs">
+        <button
+          type="button"
+          data-grade="grade1"
+          class="grade-tab text-right p-3.5 rounded-xl border-2 transition flex flex-col justify-between"
+        >
+          <span class="text-xs font-bold opacity-85">الصف الأول الثانوي</span>
+          <span class="text-base font-extrabold mt-0.5">وادي النيل والدلتا والبحر الأحمر</span>
+          <span class="text-xs mt-1 opacity-90">الجندل الأول • الدلتا • وادي الحمامات • قناة سيزوستريس</span>
+        </button>
+
+        <button
+          type="button"
+          data-grade="grade2"
+          class="grade-tab text-right p-3.5 rounded-xl border-2 transition flex flex-col justify-between"
+        >
+          <span class="text-xs font-bold opacity-85">الصف الثاني الثانوي — البكالوريا المصرية</span>
+          <span class="text-base font-extrabold mt-0.5">إقليم قناة السويس (التاريخ الوطني)</span>
+          <span class="text-xs mt-1 opacity-90">بورسعيد • الإسماعيلية والبحيرات المرة • السويس</span>
+        </button>
+
+        <button
+          type="button"
+          data-grade="grade3"
+          class="grade-tab text-right p-3.5 rounded-xl border-2 transition flex flex-col justify-between"
+        >
+          <span class="text-xs font-bold opacity-85">الصف الثالث الثانوي (الفصل الثالث)</span>
+          <span class="text-base font-extrabold mt-0.5">مسرح عمليات صيف 1882م (الثورة العرابية)</span>
+          <span class="text-xs mt-1 opacity-90">الإسكندرية • كفر الدوار • قناة السويس • التل الكبير</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- بطاقة تعريف الخريطة الحالية ومؤشر التقدم -->
+    <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div>
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-manaraNavy/10 text-manaraNavy text-xs font-bold mb-2">
+          <span id="stageBadge">الصف الأول الثانوي — تاريخ وحضارة مصر والعالم القديم</span>
+        </div>
+        <h2 id="mapTitle" class="text-lg sm:text-2xl font-extrabold text-manaraNavy">
+          خريطة وادي النيل والدلتا والبحر الأحمر وقناة سيزوستريس
+        </h2>
+        <p id="mapSubtitle" class="text-xs sm:text-sm text-slate-600 mt-1">
+          استكشف الخريطة الحقيقية وبدّل بين التضاريس الجغرافية والقمر الصناعي لتفهم كيف ربط المصري القديم النيل بالبحر الأحمر.
+        </p>
+      </div>
+
+      <!-- مؤشر التقدم -->
+      <div class="bg-manaraBg border border-slate-200 rounded-xl px-4 py-3 shrink-0 w-full md:w-auto">
+        <div class="text-xs font-bold text-slate-500">تقدمك في هذه الخريطة:</div>
+        <div class="flex items-center gap-3 mt-1">
+          <div class="text-base sm:text-lg font-extrabold text-manaraNavy" id="progressText">0 / 3 خطوات</div>
+          <div class="w-24 h-2.5 bg-slate-200 rounded-full overflow-hidden">
+            <div id="progressBar" class="h-full bg-manaraGold transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- منطقة التفاعل الرئيسية: الخريطة الحقيقية + خطوات التحليل الثلاث -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- العمود الأيمن (7 أعمدة): خريطة Leaflet الحقيقية وأزرار التبديل ومفتاح الخريطة -->
+      <div class="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+
+        <!-- شريط التحكم بنوع الخريطة الحقيقية وإعادة ضبط الإطار -->
+        <div class="bg-manaraNavy text-white px-3.5 py-3 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2" role="group" aria-label="تبديل نوع الخريطة الحقيقية">
+            <button
+              type="button"
+              id="btnTerrainLayer"
+              onclick="setMapLayer('terrain')"
+              class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition bg-manaraGold text-white shadow flex items-center gap-1.5"
+            >
+              <span>🏔️ تضاريس جغرافية</span>
+            </button>
+            <button
+              type="button"
+              id="btnSatelliteLayer"
+              onclick="setMapLayer('satellite')"
+              class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition bg-white/10 hover:bg-white/20 text-slate-100 flex items-center gap-1.5"
+            >
+              <span>🛰️ قمر صناعي</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            id="resetViewBtn"
+            class="px-3 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-amber-200 text-xs font-extrabold transition flex items-center gap-1.5"
+          >
+            <span>🧭 إعادة ضبط الإطار</span>
+          </button>
+        </div>
+
+        <!-- حاوية خريطة Leaflet الحقيقية -->
+        <div class="relative">
+          <div id="realMap"></div>
+
+          <!-- مؤشر الشمال العربي -->
+          <div class="pointer-events-none absolute top-3 left-3 z-[500] bg-manaraNavy/92 text-white border border-manaraGold rounded-xl px-2.5 py-1.5 shadow-md flex items-center gap-1.5 text-xs font-extrabold">
+            <span class="text-manaraGold text-sm">▲</span>
+            <span>شمال</span>
+          </div>
+
+          <!-- شارة الطور الزمني المعروض على الخريطة -->
+          <div id="mapPhaseBanner" class="pointer-events-none absolute bottom-3 right-3 z-[500] bg-manaraNavy/92 text-amber-200 border border-manaraGold rounded-xl px-3 py-1.5 shadow-md text-xs font-extrabold">
+            الطور المعروض: الوضع قبل التحول
+          </div>
+        </div>
+
+        <!-- مفتاح الخريطة التفاعلي -->
+        <div class="p-4 bg-manaraBg border-t border-slate-200">
+          <div class="flex items-center justify-between mb-2.5">
+            <h3 class="text-xs sm:text-sm font-extrabold text-manaraNavy">
+              🗝️ مفتاح الخريطة التفاعلي (اضغط على الرقم للانتقال للمعلم دون ازدحام):
+            </h3>
+            <span id="discoveredCount" class="text-xs font-bold text-manaraGold">اكتشفت 0 من 4 معالم</span>
+          </div>
+          <div id="legendGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+        </div>
+      </div>
+
+      <!-- العمود الأيسر (5 أعمدة): خطوات المحقق الثلاث + نافذة بوصلة المكان + التحدي -->
+      <div class="lg:col-span-5 space-y-4">
+
+        <!-- أزرار التنقل بين الخطوات الثلاث -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-2 grid grid-cols-3 gap-1.5">
+          <button
+            type="button"
+            data-step="step1"
+            class="step-btn py-2.5 px-2 rounded-xl text-xs sm:text-sm font-extrabold text-center transition"
+          >
+            1. فك الشفرة
+          </button>
+          <button
+            type="button"
+            data-step="step2"
+            class="step-btn py-2.5 px-2 rounded-xl text-xs sm:text-sm font-extrabold text-center transition"
+          >
+            2. قبل وبعد
+          </button>
+          <button
+            type="button"
+            data-step="step3"
+            class="step-btn py-2.5 px-2 rounded-xl text-xs sm:text-sm font-extrabold text-center transition"
+          >
+            3. تحدي المحقق
+          </button>
+        </div>
+
+        <!-- لوحة الخطوة النشطة -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 min-h-[430px] flex flex-col justify-between">
+
+          <!-- الخطوة 1: فك الشفرة المكانية -->
+          <div id="step1Panel" class="step-panel fade-in space-y-4">
+            <div class="border-b border-slate-100 pb-3">
+              <span class="text-xs font-bold text-manaraGold">الخطوة الأولى — القراءة المكانية الحقيقية</span>
+              <h3 class="text-base sm:text-lg font-extrabold text-manaraNavy mt-0.5">
+                دلالة المعلم في المنهج وبوصلته الجغرافية
+              </h3>
+              <p class="text-xs text-slate-500 mt-1">
+                اضغط على أي رقم فوق الخريطة أو في المفتاح لتكبير موقعه وقراءة تحليله الجغرافي والتاريخي.
+              </p>
+            </div>
+
+            <!-- بطاقة تفاصيل المعلم المختار -->
+            <div class="bg-manaraSand border-r-4 border-manaraGold rounded-xl p-4 space-y-3 border border-amber-900/10">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span id="detailBadge" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-manaraNavy text-white">
+                  معلم رقم (1)
+                </span>
+                <span id="detailCoords" class="text-[11px] font-bold text-slate-500" dir="ltr">
+                  24.09° N, 32.90° E
+                </span>
+              </div>
+
+              <h4 id="detailTitle" class="text-base sm:text-lg font-extrabold text-manaraNavy">
+                الجندل الأول بأسوان
+              </h4>
+
+              <div>
+                <div class="text-xs font-extrabold text-manaraGold mb-1">📘 دلالة المكان في المنهج:</div>
+                <p id="detailCurriculum" class="text-xs sm:text-sm text-slate-700 leading-relaxed"></p>
+              </div>
+
+              <div class="pt-2.5 border-t border-slate-200/80">
+                <div class="text-xs font-extrabold text-manaraNavy mb-1">🧭 بوصلة المكان (التفسير الجغرافي):</div>
+                <p id="detailCompass" class="text-xs sm:text-sm text-slate-700 leading-relaxed"></p>
+              </div>
+            </div>
+
+            <div class="flex justify-end pt-1">
+              <button
+                type="button"
+                onclick="switchStep('step2')"
+                class="px-4 py-2.5 rounded-xl bg-manaraNavy hover:bg-manaraNavyDark text-white text-xs sm:text-sm font-bold transition flex items-center gap-2"
+              >
+                <span>التالي: المقارنة الزمنية (قبل وبعد)</span>
+                <span>←</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- الخطوة 2: المقارنة الزمنية + نافذة بوصلة المكان -->
+          <div id="step2Panel" class="step-panel hidden fade-in space-y-4">
+            <div class="border-b border-slate-100 pb-3">
+              <span class="text-xs font-bold text-manaraGold">الخطوة الثانية — التحول الزمني على الخريطة</span>
+              <h3 class="text-base sm:text-lg font-extrabold text-manaraNavy mt-0.5">
+                المقارنة بين «قبل التحول» و«بعد التحول»
+              </h3>
+              <p class="text-xs text-slate-500 mt-1">
+                بدّل بين الوضعين لمشاهدة تغيّر المسارات ومناطق السيطرة مباشرة على الخريطة الحقيقية.
+              </p>
+            </div>
+
+            <!-- أزرار وشريط التبديل -->
+            <div class="bg-manaraBg border border-slate-200 rounded-xl p-3.5 space-y-3">
+              <div class="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  id="btnBefore"
+                  onclick="setTimelineState('before')"
+                  class="flex-1 py-2 px-2.5 rounded-lg text-xs font-extrabold transition"
+                >
+                  قبل التحول
+                </button>
+                <button
+                  type="button"
+                  id="btnAfter"
+                  onclick="setTimelineState('after')"
+                  class="flex-1 py-2 px-2.5 rounded-lg text-xs font-extrabold transition"
+                >
+                  بعد التحول
+                </button>
+              </div>
+
+              <div class="px-1">
+                <input
+                  type="range"
+                  id="timelineSlider"
+                  min="0"
+                  max="1"
+                  step="1"
+                  value="0"
+                  class="manara-slider"
+                  aria-label="شريط المقارنة الزمنية"
+                />
+                <div class="flex justify-between text-[11px] font-bold text-slate-500 mt-1">
+                  <span id="sliderLabelBefore">قبل التحول</span>
+                  <span id="sliderLabelAfter">بعد التحول</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- بطاقة شرح الطور الحالي -->
+            <div class="bg-white border-2 border-manaraNavy/15 rounded-xl p-4 space-y-2">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span id="timelinePhaseTag" class="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-amber-100 text-manaraGold"></span>
+                <span id="timelineYear" class="text-xs font-extrabold text-manaraNavy"></span>
+              </div>
+              <h4 id="timelineTitle" class="text-sm sm:text-base font-extrabold text-manaraNavy"></h4>
+              <p id="timelineDesc" class="text-xs sm:text-sm text-slate-700 leading-relaxed"></p>
+            </div>
+
+            <!-- نافذة بوصلة المكان -->
+            <div class="bg-manaraNavy text-white rounded-xl p-3.5 space-y-1.5 border-r-4 border-manaraGold">
+              <div class="text-xs font-extrabold text-amber-300">
+                🧭 نافذة [بوصلة المكان]:
+              </div>
+              <p id="compassExplanation" class="text-xs sm:text-sm text-slate-100 leading-relaxed"></p>
+            </div>
+
+            <div class="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onclick="switchStep('step1')"
+                class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-manaraNavy text-xs font-bold transition"
+              >
+                → السابق
+              </button>
+              <button
+                type="button"
+                onclick="switchStep('step3')"
+                class="px-4 py-2.5 rounded-xl bg-manaraGold hover:bg-manaraGoldLight text-white text-xs sm:text-sm font-bold transition flex items-center gap-2"
+              >
+                <span>التالي: تحدي المحقق التاريخي</span>
+                <span>←</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- الخطوة 3: تحدي المحقق التاريخي -->
+          <div id="step3Panel" class="step-panel hidden fade-in space-y-4">
+            <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
+              <div>
+                <span class="text-xs font-bold text-manaraGold">الخطوة الثالثة — قياس نواتج التعلم</span>
+                <h3 class="text-base sm:text-lg font-extrabold text-manaraNavy mt-0.5">
+                  تحدي المحقق التاريخي
+                </h3>
+              </div>
+              <span id="quizCounter" class="text-xs font-extrabold px-3 py-1 rounded-full bg-manaraNavy text-white">
+                سؤال 1 من 3
+              </span>
+            </div>
+
+            <!-- حاوية الأسئلة -->
+            <div id="quizQuestionBox" class="space-y-3">
+              <p id="questionText" class="text-sm sm:text-base font-bold text-manaraNavy leading-relaxed"></p>
+              <div id="optionsContainer" class="space-y-2"></div>
+
+              <!-- التغذية الراجعة وفكرة الحل -->
+              <div id="feedbackBox" class="hidden rounded-xl p-3.5 text-sm space-y-1.5">
+                <div id="feedbackHeader" class="font-extrabold"></div>
+                <p id="feedbackHint" class="text-xs sm:text-sm leading-relaxed"></p>
+              </div>
+
+              <div class="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onclick="switchStep('step2')"
+                  class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-manaraNavy text-xs font-bold transition"
+                >
+                  → مراجعة الخريطة
+                </button>
+                <button
+                  type="button"
+                  id="nextQuestionBtn"
+                  onclick="nextQuestion()"
+                  class="hidden px-4 py-2 rounded-xl bg-manaraNavy hover:bg-manaraNavyDark text-white text-xs sm:text-sm font-bold transition"
+                >
+                  السؤال التالي ←
+                </button>
+              </div>
+            </div>
+
+            <!-- وسام المحقق التاريخي عند إتمام الأسئلة -->
+            <div id="badgeResultBox" class="hidden text-center bg-gradient-to-b from-manaraNavy to-manaraNavyDark text-white rounded-2xl p-5 space-y-3 border-2 border-manaraGold">
+              <div class="w-16 h-16 mx-auto rounded-full bg-manaraGold/20 border-2 border-manaraGold flex items-center justify-center text-3xl">
+                🏅
+              </div>
+              <div class="text-xs font-bold text-amber-300">
+                وسام المحقق التاريخي — أكاديمية المنارة التعليمية
+              </div>
+              <h4 id="badgeTitle" class="text-xl font-extrabold text-white">
+                محقق تاريخي خبير
+              </h4>
+              <p id="badgeScoreText" class="text-sm text-slate-200"></p>
+              <p id="badgeSummaryText" class="text-xs text-amber-200 leading-relaxed"></p>
+
+              <div class="flex flex-wrap items-center justify-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onclick="copyResultText()"
+                  class="px-4 py-2 rounded-xl bg-manaraGold hover:bg-manaraGoldLight text-white text-xs sm:text-sm font-bold transition"
+                >
+                  📋 نسخ النتيجة للمشاركة
+                </button>
+                <button
+                  type="button"
+                  id="nextGradeBtn"
+                  onclick="goToNextGrade()"
+                  class="px-4 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs sm:text-sm font-bold transition"
+                >
+                  المرحلة التالية ←
+                </button>
+                <button
+                  type="button"
+                  onclick="resetCurrentQuiz()"
+                  class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition"
+                >
+                  إعادة التحدي
+                </button>
+              </div>
+              <div id="copyToast" class="hidden text-xs font-bold text-emerald-300 pt-1">
+                ✓ تم نسخ بطاقة وسامك بنجاح!
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- الفوتر السفلي الثابت والمعتمد -->
+  <footer class="bg-manaraNavy text-white border-t-4 border-manaraGold mt-10">
+    <div class="max-w-6xl mx-auto px-4 py-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-right">
+      <div class="font-extrabold text-base sm:text-lg tracking-wide text-amber-300">
+        المنارة التعليمية / هنذاكر تاريخ سوا / واتس 01097083710
+      </div>
+      <div class="text-xs text-slate-300">
+        مختبر تحليل الخرائط التفاعلي — أكاديمية المنارة التعليمية
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // =========================================================================
+    // 1. قاعدة البيانات الجغرافية والتاريخية الموثقة للمراحل الثلاث
+    // =========================================================================
+    const MAPS_DATABASE = {
+      grade1: {
+        id: 'grade1',
+        badge: 'الصف الأول الثانوي — تاريخ وحضارة مصر والعالم القديم',
+        title: 'خريطة وادي النيل والدلتا والبحر الأحمر وقناة سيزوستريس',
+        subtitle:
+          'استكشف الجندل الأول بأسوان وإقليم الدلتا ووادي الحمامات، وقارن حركة التجارة قبل وبعد حفر قناة سيزوستريس في عهد الملك سنوسرت الثالث.',
+        center: [27.6, 32.1],
+        zoom: 6,
+        nextGrade: 'grade2',
+        nextGradeLabel: 'الانتقال لخريطة الصف الثاني الثانوي',
+        timeline: {
+          beforeLabel: 'قبل حفر قناة سيزوستريس (الدروب البرية)',
+          afterLabel: 'بعد حفر قناة سيزوستريس (سنوسرت الثالث)',
+          before: {
+            tag: 'قبل حفر القناة (العصر العتيق والدولة القديمة)',
+            year: 'الاعتماد على الدروب الصحراوية',
+            title: 'قوافل برية عبر أودية الصحراء الشرقية إلى موانئ البحر الأحمر',
+            desc: 'اعتمدت الرحلات التجارية المتجهة إلى بلاد بونت على السير البري عبر الأودية الجافة في الصحراء الشرقية — مثل وادي الحمامات — لنقل البضائع مفككة إلى موانئ البحر الأحمر ثم إبحارها جنوباً.',
+          },
+          after: {
+            tag: 'بعد حفر قناة سيزوستريس (عصر الدولة الوسطى)',
+            year: 'عهد الملك سنوسرت الثالث (الأسرة 12)',
+            title: 'اتصال مائي مباشر يربط نهر النيل بالبحر الأحمر عبر البحيرات المرة',
+            desc: 'أمر الملك سنوسرت الثالث بحفر قناة سيزوستريس التي ربطت الفرع الشرقي للنيل (الفرع البيلوزي) بالبحر الأحمر مروراً بالبحيرات المرة؛ فازدهرت التجارة المباشرة مع بلاد بونت وجزر البحر المتوسط.',
+          },
+          compass:
+            'جغرافياً، يفصل الحاجز الصحراوي للصحراء الشرقية بين وادي النيل والبحر الأحمر؛ وبحفر قناة سيزوستريس عبر منخفض وادي الطميلات والبحيرات المرة، تحوّل الاتصال التجاري من دروب صحراوية شاقة إلى مجرى ملاحي ميسّر زاد من رخاء الدولة الوسطى.',
+        },
+        markers: [
+          {
+            id: 'first_cataract',
+            name: 'الجندل الأول بأسوان',
+            tinyLabel: 'الجندل الأول',
+            labelDir: 'bottom',
+            coords: [24.0889, 32.8998],
+            curriculum:
+              'كتل صخرية جرانيتية تعترض مجرى نهر النيل عند أسوان جنوب مصر؛ مثّلت الحد الجنوبي الطبيعي التاريخي لمصر القديمة، وعمل ملوك الدولة الوسطى على تأمين الحدود عندها.',
+            compass:
+              'تعرقل الصخور النارية حركة السفن السريعة القادمة من الجنوب، فوفرت درع حماية طبيعي للحدود الجنوبية وساعدت على ضبط حركة التجارة مع النوبة.',
+          },
+          {
+            id: 'delta_branches',
+            name: 'إقليم الدلتا وفروع النيل',
+            tinyLabel: 'الدلتا',
+            labelDir: 'top',
+            coords: [31.05, 31.15],
+            curriculum:
+              'السهل الفيضي المثلث في شمال مصر؛ مركز الثقل الزراعي والحضاري ومنطلق السفن المصرية عبر فروع النيل نحو موانئ البحر المتوسط وجزره وفينيقيا.',
+            compass:
+              'انبساط السطح وتفرع مجرى النيل في الدلتا سهّلا الزراعة الكثيفة والنقل المائي، وربطا داخل الوادي بسواحل البحر المتوسط.',
+          },
+          {
+            id: 'wadi_hammamat',
+            name: 'الصحراء الشرقية ووادي الحمامات',
+            tinyLabel: 'وادي الحمامات',
+            labelDir: 'right',
+            coords: [25.9833, 33.5667],
+            curriculum:
+              'أحد أهم الأودية الجافة في الصحراء الشرقية؛ استخدمه المصريون القدماء كطريق للقوافل التجارية والتعدينية بين مدينة قفط على النيل وميناء القصير على البحر الأحمر.',
+            compass:
+              'يمثل وادي الحمامات ممراً طبيعياً يخترق سلاسل جبال البحر الأحمر، فكان همزة الوصل البرية الأهم قبل حفر القناة المائية.',
+          },
+          {
+            id: 'sesostris_canal',
+            name: 'قناة سيزوستريس (سنوسرت الثالث)',
+            tinyLabel: 'قناة سيزوستريس',
+            labelDir: 'left',
+            coords: [30.52, 32.18],
+            curriculum:
+              'أقدم قناة مائية صناعية في التاريخ ربطت نهر النيل بالبحر الأحمر عن طريق البحيرات المرة؛ شقّها الملك سنوسرت الثالث (الأسرة الثانية عشرة) لتنشيط التجارة مع بلاد بونت.',
+            compass:
+              'استثمر المهندسون المصريون الامتداد الطبيعي لمنخفض وادي الطميلات والبحيرات المرة لتوصيل المياه العذبة من النيل بالبحر الأحمر بأقل عائق تضاريسي.',
+          },
+        ],
+        quiz: [
+          {
+            question:
+              'بالنظر إلى الخريطة الحقيقية لمصر القديمة، ما الأثر الاقتصادي المباشر لحفر «قناة سيزوستريس» في عهد الملك سنوسرت الثالث؟',
+            options: [
+              'تيسير الاتصال الملاحي المباشر بين نهر النيل والبحر الأحمر وتنشيط التجارة مع بلاد بونت',
+              'فصل إقليم الدلتا عن وادي النيل ومنع الملاحة النهرية نحو الجنوب',
+              'إغلاق طريق وادي الحمامات ومنع التعدين في الصحراء الشرقية نهائياً',
+              'ربط الجندل الأول بأسوان بساحل البحر المتوسط عبر الصحراء الغربية',
+            ],
+            correct: 0,
+            hint: 'تتبع الخط الذهبي المرسوم على الخريطة في طور «بعد حفر القناة» لترى كيف وصل النيل بالبحر الأحمر.',
+          },
+          {
+            question:
+              'كيف أسهم «الجندل الأول بأسوان» الظاهر في جنوب الخريطة في حماية الأمن القومي لمصر القديمة؟',
+            options: [
+              'شكّل عائقاً صخرياً طبيعياً يعترض مجرى النيل ويؤمّن الحدود الجنوبية لمصر',
+              'ربط البحر الأحمر بالبحر المتوسط في شمال الدلتا',
+              'وفّر تربة بركانية على ساحل البحر المتوسط',
+              'كان الميناء الرئيسي لاستقبال السفن القادمة من جزيرة كريت',
+            ],
+            correct: 0,
+            hint: 'الجنادل كتل صخرية صلبة تعترض مجرى النهر عند أسوان فتكسر اندفاع السفن المعادية من الجنوب.',
+          },
+          {
+            question:
+              'ما الدور الجغرافي الذي لعبه «وادي الحمامات في الصحراء الشرقية» قبل حفر قناة سيزوستريس؟',
+            options: [
+              'ممر بري للقوافل التجارية والتعدينية يربط وادي النيل بساحل البحر الأحمر',
+              'بحيرة مالحة تقع في شمال غرب الدلتا قرب الإسكندرية',
+              'مصب فرع رشيد على البحر المتوسط',
+              'مضيق بحري يفصل بين قارتي إفريقيا وأوروبا',
+            ],
+            correct: 0,
+            hint: 'لاحظ موقع دبوس «وادي الحمامات» بين ثنية النيل عند قنا/قفط وبين ساحل البحر الأحمر.',
+          },
+        ],
+      },
+
+      grade2: {
+        id: 'grade2',
+        badge: 'الصف الثاني الثانوي — البكالوريا المصرية (التاريخ الوطني)',
+        title: 'خريطة إقليم قناة السويس واستكمال السيادة الوطنية',
+        subtitle:
+          'قارن على الخريطة الحقيقية لإقليم قناة السويس بين القيود العسكرية والاقتصادية بعد تصريح 1922م، وبين استعادة السيادة بالجلاء (1954–1956م) وتأميم القناة.',
+        center: [30.58, 32.33],
+        zoom: 8,
+        nextGrade: 'grade3',
+        nextGradeLabel: 'الانتقال لخريطة الصف الثالث الثانوي',
+        timeline: {
+          beforeLabel: 'استقلال 1922م المنقوص (قيود السيادة)',
+          afterLabel: 'الجلاء 1954–1956م وتأميم القناة',
+          before: {
+            tag: 'مرحلة الاستقلال المنقوص (1922م — 1954م)',
+            year: 'تصريح 28 فبراير 1922م',
+            title: 'بقاء القواعد البريطانية في القنال وإدارة أجنبية للشركة',
+            desc: 'رغم اعتراف تصريح 28 فبراير 1922م بمصر دولة مستقلة ذات سيادة، أبقت التحفظات الأربعة (تأمين المواصلات البريطانية والدفاع عن مصر) القوات البريطانية في منطقة القناة، وظلت الشركة الأجنبية تدير الممر الملاحي.',
+          },
+          after: {
+            tag: 'مرحلة السيادة الكاملة (1954م — 1956م)',
+            year: 'اتفاقية الجلاء 1954م وتأميم 26 يوليو 1956م',
+            title: 'رحيل آخر جندي بريطاني وعودة القناة ملكاً خالصاً لمصر',
+            desc: 'بتوقيع اتفاقية الجلاء في أكتوبر 1954م ورحيل آخر جندي بريطاني في 18 يونيو 1956م، ثم تأميم شركة قناة السويس في 26 يوليو 1956م، اكتملت السيادة العسكرية والاقتصادية لمصر على الإقليم.',
+          },
+          compass:
+            'جغرافياً، تربط قناة السويس البحر المتوسط عند بورسعيد بالبحر الأحمر عند السويس مروراً ببحيرة التمساح والبحيرات المرة؛ لذا أدركت قيادة ثورة 23 يوليو أن تحرير ضفتي القناة عسكرياً بالجلاء واقتصادياً بالتأميم هو مفتاح السيادة الوطنية الكاملة.',
+        },
+        markers: [
+          {
+            id: 'portsaid_g2',
+            name: 'بورسعيد',
+            tinyLabel: 'بورسعيد',
+            labelDir: 'top',
+            coords: [31.2653, 32.3019],
+            curriculum:
+              'المدخل الشمالي لقناة السويس على ساحل البحر المتوسط، وبوابة عبور التجارة العالمية بين حوض المتوسط والشرق.',
+            compass:
+              'موقعها الساحلي في أقصى شمال المجرى الملاحي جعلها نقطة ارتكاز حيوية للسيادة المصرية على مدخل القناة.',
+          },
+          {
+            id: 'ismailia_g2',
+            name: 'الإسماعيلية',
+            tinyLabel: 'الإسماعيلية',
+            labelDir: 'right',
+            coords: [30.5965, 32.2715],
+            curriculum:
+              'مركز إدارة شركة قناة السويس ومقر قيادة القوات البريطانية في منطقة القنال قبل تنفيذ الجلاء وتأميم الشركة عام 1956م.',
+            compass:
+              'توسطها الجغرافي على بحيرة التمساح في منتصف المسافة بين بورسعيد والسويس جعلها عقدة التحكم الإداري والعسكري في الإقليم.',
+          },
+          {
+            id: 'bitter_lakes_g2',
+            name: 'البحيرات المرة',
+            tinyLabel: 'البحيرات المرة',
+            labelDir: 'left',
+            coords: [30.33, 32.38],
+            curriculum:
+              'منطقة ارتكاز القواعد العسكرية البريطانية قبل الجلاء، والمسطح المائي الواسع الذي يسمح بانتظار وتبادل عبور القوافل البحرية في الاتجاهين.',
+            compass:
+              'استُغلت طبيعتها الحوضية المنخفضة عند شق القناة لتيسير الملاحة وتنظيم حركة السفن العابرة بين البحرين.',
+          },
+          {
+            id: 'suez_g2',
+            name: 'السويس',
+            tinyLabel: 'السويس',
+            labelDir: 'bottom',
+            coords: [29.9668, 32.5498],
+            curriculum:
+              'المدخل الجنوبي لقناة السويس على رأس خليج السويس والبحر الأحمر، ونقطة الاتصال البحري نحو آسيا وشرق إفريقيا.',
+            compass:
+              'تتحكم في الطرف الجنوبي للممر الملاحي، فتكتمل بها حلقة الربط البحري الاستراتيجي بين البحر المتوسط والبحر الأحمر.',
+          },
+        ],
+        quiz: [
+          {
+            question:
+              'في ضوء الخريطة الحقيقية لإقليم قناة السويس، لماذا لم يحقق تصريح 28 فبراير 1922م السيادة الوطنية الكاملة لمصر؟',
+            options: [
+              'لأن التحفظات الأربعة أبقت القوات البريطانية لتأمين المواصلات في منطقة القنال مع استمرار الإدارة الأجنبية للقناة',
+              'لأن التصريح نص على ردم قناة السويس وإغلاق ميناء بورسعيد أمام التجارة',
+              'لأن التصريح منح مصر السيادة العسكرية الكاملة على السويس وبورسعيد منذ عام 1922م',
+              'لأن بريطانيا انسحبت من جميع الأراضي المصرية فور صدور التصريح',
+            ],
+            correct: 0,
+            hint: 'قارن على الخريطة بين طور «استقلال 1922م المنقوص» وطور «الجلاء والتأميم 1956م».',
+          },
+          {
+            question:
+              'ما الدلالة الاستراتيجية لتكامل «عيد الجلاء (18 يونيو 1956م)» مع «قرار التأميم (26 يوليو 1956م)» في إقليم القناة؟',
+            options: [
+              'استعادة السيادة العسكرية بإخراج القوات الأجنبية، واستعادة السيادة الاقتصادية بنقل ملكية القناة وإدارتها لمصر',
+              'اقتصار المكاسب على تطوير الصيد في البحيرات المرة فقط',
+              'نقل إدارة القناة من الإسماعيلية إلى شركة أجنبية جديدة في بورسعيد',
+              'توقف حركة الملاحة الدولية بين البحر المتوسط والبحر الأحمر',
+            ],
+            correct: 0,
+            hint: 'الجلاء أنهى الوجود العسكري الأجنبي على ضفتي القناة، والتأميم أنهى السيطرة المالية والإدارية الأجنبية.',
+          },
+          {
+            question:
+              'توضح الخريطة موقع «البحيرات المرة» جنوب الإسماعيلية؛ ما الدور الجغرافي والملاحي لهذه البحيرات في مجرى قناة السويس؟',
+            options: [
+              'تعمل كمنطقة انتظار وتبادل لعبور القوافل البحرية العابرة بين بورسعيد والسويس',
+              'تفصل مدينة بورسعيد عن ساحل البحر المتوسط',
+              'تقع في أقصى جنوب مصر عند الجندل الأول بأسوان',
+              'تمنع اتصال مياه قناة السويس بخليج السويس',
+            ],
+            correct: 0,
+            hint: 'انظر إلى اتساع المسطح المائي للبحيرات المرة على صورة القمر الصناعي في القطاع الجنوبي للقناة.',
+          },
+        ],
+      },
+
+      grade3: {
+        id: 'grade3',
+        badge: 'الصف الثالث الثانوي — تاريخ مصر والعرب الحديث والمعاصر (الفصل الثالث)',
+        title: 'خريطة مسرح عمليات صيف 1882م (الثورة العرابية)',
+        subtitle:
+          'تتبع على الخريطة الحقيقية صمود دفاعات كفر الدوار وترعة المحمودية في يوليو 1882م، وكيف تحولت بوصلة الغزو البريطاني شرقاً نحو قناة السويس والتل الكبير.',
+        center: [30.78, 31.15],
+        zoom: 8,
+        nextGrade: 'grade1',
+        nextGradeLabel: 'العودة لخريطة الصف الأول الثانوي',
+        timeline: {
+          beforeLabel: 'المرحلة 1: صمود كفر الدوار شمالاً (يوليو 1882)',
+          afterLabel: 'المرحلة 2: الالتفاف شرقاً عبر القناة (أغسطس–سبتمبر)',
+          before: {
+            tag: 'المرحلة الأولى (يوليو 1882م)',
+            year: 'عقب قصف الإسكندرية (11 يوليو 1882م)',
+            title: 'فشل الاختراق البريطاني من الشمال أمام تحصينات كفر الدوار',
+            desc: 'بعد احتلال الإسكندرية، أقام أحمد عرابي خط دفاع حصين في كفر الدوار مستنداً إلى ترعة المحمودية وشبكة الري، فأوقف زحف القوات البريطانية نحو القاهرة تماماً.',
+          },
+          after: {
+            tag: 'المرحلة الثانية (أغسطس — سبتمبر 1882م)',
+            year: 'الالتفاف البحري عبر قناة السويس',
+            title: 'تحول البوصلة البريطانية شرقاً نحو قناة السويس والتل الكبير',
+            desc: 'بعد فشل اختراق جبهة كفر الدوار، تحرك الأسطول البريطاني شرقاً واقتحم قناة السويس بتواطؤ إدارة الشركة الأجنبية (ديليسبس)، وتقدم من الإسماعيلية إلى التل الكبير ثم دخل القاهرة.',
+          },
+          compass:
+            'جغرافياً، أعاقت شبكة الترع العذبة (ترعة المحمودية) والمصارف والأراضي الزراعية في شمال غرب الدلتا حركة المدفعية البريطانية الثقيلة؛ فاضطرت بريطانيا لتغيير بوصلتها العسكرية والالتفاف شرقاً عبر المجرى الملاحي المفتوح لقناة السويس نحو الحافة الشرقية للدلتا عند التل الكبير.',
+        },
+        markers: [
+          {
+            id: 'alexandria_g3',
+            name: 'الإسكندرية وقصر رأس التين',
+            tinyLabel: 'الإسكندرية',
+            labelDir: 'top',
+            coords: [31.2001, 29.9187],
+            curriculum:
+              'نقطة القصف البريطاني في 11 يوليو 1882م واحتلال المدينة، وانحياز الخديوي توفيق للإنجليز في قصر رأس التين وإصداره قراراً بعزل عرابي من وزارة الحربية.',
+            compass:
+              'موقعها الساحلي المكشوف أمام مدفعية الأسطول البحري البريطاني دفع عرابي للانسحاب جنوباً شرقاً لاختيار خط دفاع تحميه التضاريس الداخلية.',
+          },
+          {
+            id: 'kafr_el_dawwar_g3',
+            name: 'كفر الدوار وترعة المحمودية',
+            tinyLabel: 'كفر الدوار',
+            labelDir: 'bottom',
+            coords: [31.1338, 30.1297],
+            curriculum:
+              'خط الدفاع المائي والزراعي الذي أقامه أحمد عرابي جنوب شرق الإسكندرية، ونجح في صد الهجمات البريطانية وإجبار القيادة الإنجليزية على تغيير خطة الغزو.',
+            compass:
+              'تتقاطع عندها ترعة المحمودية والمجاري المائية والأراضي الزراعية المغمورة، مما عرقل تقدم المدفعية والخيالة البريطانية من جهة الشمال.',
+          },
+          {
+            id: 'suez_canal_g3',
+            name: 'قناة السويس',
+            tinyLabel: 'قناة السويس',
+            labelDir: 'left',
+            coords: [30.5965, 32.2715],
+            curriculum:
+              'تحول بوصلة الغزو البريطاني شرقاً للاستفادة من المجرى الملاحي بعد تواطؤ إدارة شركة قناة السويس الأجنبية (فرديناند ديليسبس) والسماح بعبور السفن الحربية.',
+            compass:
+              'ممر ملاحي عميق ومباشر أتاح للأسطول البريطاني نقل قواته ومعداته إلى قلب الجبهة الشرقية بعيداً عن عوائق الدلتا المائية.',
+          },
+          {
+            id: 'tel_el_kebir_g3',
+            name: 'التل الكبير',
+            tinyLabel: 'التل الكبير',
+            labelDir: 'right',
+            coords: [30.5536, 31.7844],
+            curriculum:
+              'مسرح المواجهة الفاصلة في سبتمبر 1882م التي انتهت بهزيمة الجيش المصري واتجاه القوات البريطانية مباشرة لدخول العاصمة القاهرة.',
+            compass:
+              'تقع في نطاق وادي الطميلات على الحافة الشرقية للدلتا بأرض مفتوحة نسبياً سهّلت اندفاع القوات البريطانية القادمة من الإسماعيلية نحو القاهرة.',
+          },
+        ],
+        quiz: [
+          {
+            question:
+              'على الخريطة الحقيقية لشمال الدلتا، ما السبب الجغرافي الذي جعل «كفر الدوار وترعة المحمودية» صخرة صمود أمام الجيش البريطاني في يوليو 1882م؟',
+            options: [
+              'تشابك ترعة المحمودية والمجاري المائية والأراضي الزراعية مما أعاق حركة المدفعية البريطانية',
+              'وجود سلاسل جبلية بركانية مرتفعة تفصل الإسكندرية عن كفر الدوار',
+              'وقوع كفر الدوار على ساحل البحر الأحمر في أقصى الشرق',
+              'بعد كفر الدوار عن الإسكندرية بمسافة تتجاوز 700 كيلومتر',
+            ],
+            correct: 0,
+            hint: 'لاحظ قرب كفر الدوار من الإسكندرية ووجودها وسط بيئة زراعية ومائية متشابكة جنوب شرق الساحل.',
+          },
+          {
+            question:
+              'بدّل الخريطة إلى «المرحلة 2: الالتفاف شرقاً عبر القناة»؛ لماذا غيّر الأسطول البريطاني بوصلته نحو بورسعيد والإسماعيلية في أغسطس 1882م؟',
+            options: [
+              'لفشل اختراق تحصينات كفر الدوار شمالاً وتواطؤ إدارة شركة قناة السويس الأجنبية معهم',
+              'لأن مدينة القاهرة تطل مباشرة على ساحل البحر المتوسط شرق بورسعيد',
+              'لانسحاب أحمد عرابي بقواته إلى أسوان في أقصى الجنوب',
+              'لأن بريطانيا قررت الانسحاب من مصر وإنهاء العمليات العسكرية',
+            ],
+            correct: 0,
+            hint: 'تتبع المسار البحري المنحني على الخريطة من البحر المتوسط إلى قناة السويس ثم التل الكبير.',
+          },
+          {
+            question:
+              'توضح الخريطة موقع «التل الكبير» بين الإسماعيلية والقاهرة؛ ما الطبيعة الجغرافية التي ميّزت هذا المحور الشرقي مقارنة بجبهة كفر الدوار؟',
+            options: [
+              'أرض مفتوحة نسبياً على الحافة الشرقية للدلتا سهّلت تقدم القوات القادمة من القناة نحو القاهرة',
+              'منطقة بحيرات مالحة تفصل سيناء عن خليج العقبة',
+              'سلسلة شلالات صخرية تعترض مجرى قناة السويس',
+              'جزيرة معزولة في وسط البحر المتوسط',
+            ],
+            correct: 0,
+            hint: 'قارن على صورة القمر الصناعي بين كثافة الترع والأراضي الزراعية في شمال الدلتا وبين الحافة الصحراوية الشرقية عند التل الكبير.',
+          },
+        ],
+      },
+    };
+
+    // =========================================================================
+    // 2. تهيئة خريطة Leaflet الحقيقية (تضاريس جغرافية / قمر صناعي) بدون تسميات أجنبية
+    // =========================================================================
+    let map;
+    let mapLayers = {};
+    let activeLayerType = 'terrain';
+    let routesLayerGroup;
+    let markersLayerGroup;
+    let markerObjectsMap = {};
+    const ARABIC_DIGITS = ['١', '٢', '٣', '٤', '٥', '٦'];
+
+    const state = {
+      currentGrade: 'grade1',
+      currentStep: 'step1',
+      timelineMode: 'before',
+      activeMarkerId: null,
+      discoveredMarkers: {
+        grade1: new Set(),
+        grade2: new Set(),
+        grade3: new Set(),
+      },
+      visitedTimeline: {
+        grade1: false,
+        grade2: false,
+        grade3: false,
+      },
+      quizState: {
+        grade1: { index: 0, score: 0, answered: false, completed: false },
+        grade2: { index: 0, score: 0, answered: false, completed: false },
+        grade3: { index: 0, score: 0, answered: false, completed: false },
+      },
+    };
+
+    function initLeafletMap() {
+      // طبقات خرائط حقيقية نظيفة تماماً من أي كتابات أجنبية
+      mapLayers = {
+        terrain: L.tileLayer(
+          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}',
+          {
+            maxNativeZoom: 13,
+            maxZoom: 16,
+            attribution: 'خريطة التضاريس الجغرافية — أكاديمية المنارة التعليمية',
+          }
+        ),
+        satellite: L.tileLayer(
+          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          {
+            maxZoom: 16,
+            attribution: 'صور الأقمار الصناعية — أكاديمية المنارة التعليمية',
+          }
+        ),
+      };
+
+      map = L.map('realMap', {
+        center: MAPS_DATABASE.grade1.center,
+        zoom: MAPS_DATABASE.grade1.zoom,
+        layers: [mapLayers.terrain],
+        zoomControl: true,
+      });
+
+      routesLayerGroup = L.layerGroup().addTo(map);
+      markersLayerGroup = L.layerGroup().addTo(map);
+
+      // إظهار التسميات القصيرة فقط عند التكبير (Zoom >= 8) وإخفاؤها عند التصغير لمنع التداخل تماماً
+      map.on('zoomend', () => {
+        syncZoomLabelsVisibility();
+      });
+
+      window.addEventListener('resize', () => {
+        if (map) {
+          map.invalidateSize();
+        }
+      });
+    }
+
+    function syncZoomLabelsVisibility() {
+      if (!map) return;
+      const showCompactLabels = map.getZoom() >= 8;
+      Object.values(markerObjectsMap).forEach((marker) => {
+        if (showCompactLabels) {
+          marker.openTooltip();
+        } else {
+          marker.closeTooltip();
+        }
+      });
+    }
+
+    // زر تبديل نوع الخريطة الحقيقية (تضاريس جغرافية / قمر صناعي)
+    function setMapLayer(type) {
+      if (!mapLayers[type] || type === activeLayerType) return;
+
+      map.removeLayer(mapLayers[activeLayerType]);
+      mapLayers[type].addTo(map);
+      activeLayerType = type;
+
+      const btnTerrain = document.getElementById('btnTerrainLayer');
+      const btnSatellite = document.getElementById('btnSatelliteLayer');
+
+      if (type === 'terrain') {
+        btnTerrain.className =
+          'px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition bg-manaraGold text-white shadow flex items-center gap-1.5';
+        btnSatellite.className =
+          'px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition bg-white/10 hover:bg-white/20 text-slate-100 flex items-center gap-1.5';
+      } else {
+        btnSatellite.className =
+          'px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition bg-manaraGold text-white shadow flex items-center gap-1.5';
+        btnTerrain.className =
+          'px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition bg-white/10 hover:bg-white/20 text-slate-100 flex items-center gap-1.5';
+      }
+    }
+
+    // =========================================================================
+    // 3. رسم المسارات الجغرافية والتاريخية الحقيقية والدبابيس العربية
+    // =========================================================================
+    function renderRoutesAndZones(gradeKey, mode) {
+      routesLayerGroup.clearLayers();
+      const isAfter = mode === 'after';
+
+      if (gradeKey === 'grade1') {
+        // مجرى نهر النيل الحقيقي من أسوان حتى الدلتا
+        const mainNilePath = [
+          [24.0889, 32.8998], // الجندل الأول بأسوان
+          [25.6872, 32.6396], // طيبة (الأقصر)
+          [26.1551, 32.7160], // قنا / قفط
+          [27.1783, 31.1859], // أسيوط
+          [29.8447, 31.2508], // منف
+          [30.1800, 31.1200], // رأس الدلتا
+        ];
+
+        const rosettaBranch = [
+          [30.1800, 31.1200],
+          [31.4000, 30.4200],
+        ];
+
+        const damiettaBranch = [
+          [30.1800, 31.1200],
+          [31.4200, 31.8100],
+        ];
+
+        L.polyline(mainNilePath, {
+          color: '#1D4ED8',
+          weight: 4,
+          opacity: 0.85,
+        }).addTo(routesLayerGroup);
+
+        L.polyline(rosettaBranch, {
+          color: '#1D4ED8',
+          weight: 3.5,
+          opacity: 0.85,
+        }).addTo(routesLayerGroup);
+
+        L.polyline(damiettaBranch, {
+          color: '#1D4ED8',
+          weight: 3.5,
+          opacity: 0.85,
+        }).addTo(routesLayerGroup);
+
+        if (!isAfter) {
+          // قبل حفر القناة: مسار القوافل البرية عبر وادي الحمامات إلى ساحل البحر الأحمر
+          const overlandWadiRoute = [
+            [26.1551, 32.7160], // قفط على النيل
+            [25.9833, 33.5667], // وادي الحمامات
+            [26.1045, 34.2800], // ميناء القصير على البحر الأحمر
+          ];
+
+          L.polyline(overlandWadiRoute, {
+            color: '#1B2A49',
+            weight: 4.5,
+            dashArray: '8, 6',
+          }).addTo(routesLayerGroup);
+        } else {
+          // بعد حفر قناة سيزوستريس: مسار مائي يربط الفرع الشرقي للنيل بالبحر الأحمر عبر البحيرات المرة
+          const sesostrisWaterRoute = [
+            [30.4500, 31.5000], // الفرع البيلوزي الشرقي للنيل
+            [30.5536, 31.7844], // وادي الطميلات
+            [30.5200, 32.1800], // قناة سيزوستريس
+            [30.3300, 32.3800], // البحيرات المرة
+            [29.9668, 32.5498], // خليج السويس والبحر الأحمر
+          ];
+
+          L.polyline(sesostrisWaterRoute, {
+            color: '#C2562B',
+            weight: 5.5,
+            opacity: 0.95,
+          }).addTo(routesLayerGroup);
+        }
+      } else if (gradeKey === 'grade2') {
+        // مسار قناة السويس الحقيقي من بورسعيد -> الإسماعيلية -> البحيرات المرة -> السويس
+        const canalCourse = [
+          [31.2653, 32.3019], // بورسعيد
+          [30.8500, 32.3100], // القنطرة
+          [30.5965, 32.2715], // الإسماعيلية
+          [30.3300, 32.3800], // البحيرات المرة
+          [29.9668, 32.5498], // السويس
+        ];
+
+        L.polyline(canalCourse, {
+          color: isAfter ? '#C2562B' : '#991B1B',
+          weight: 6,
+          opacity: 0.95,
+        }).addTo(routesLayerGroup);
+
+        // نطاق السيطرة على إقليم القناة
+        L.polygon(
+          [
+            [31.28, 32.14],
+            [31.28, 32.46],
+            [29.95, 32.68],
+            [29.95, 32.35],
+          ],
+          {
+            color: isAfter ? '#1B2A49' : '#991B1B',
+            fillColor: isAfter ? '#C2562B' : '#DC2626',
+            fillOpacity: 0.18,
+            weight: 2.5,
+            dashArray: isAfter ? null : '7, 6',
+          }
+        ).addTo(routesLayerGroup);
+      } else if (gradeKey === 'grade3') {
+        if (!isAfter) {
+          // المرحلة الأولى (يوليو 1882م): محاولة التقدم من الإسكندرية وتوقفها عند دفاعات كفر الدوار وترعة المحمودية
+          const blockedNorthAdvance = [
+            [31.2001, 29.9187], // الإسكندرية
+            [31.1338, 30.1297], // كفر الدوار
+          ];
+
+          const kafrDefenseLine = [
+            [31.22, 30.08],
+            [31.05, 30.19],
+          ];
+
+          L.polyline(blockedNorthAdvance, {
+            color: '#DC2626',
+            weight: 4.5,
+            dashArray: '8, 6',
+          }).addTo(routesLayerGroup);
+
+          L.polyline(kafrDefenseLine, {
+            color: '#1B2A49',
+            weight: 6.5,
+          }).addTo(routesLayerGroup);
+        } else {
+          // المرحلة الثانية (أغسطس–سبتمبر 1882م): الالتفاف عبر البحر المتوسط وقناة السويس نحو التل الكبير والقاهرة
+          const easternBypassRoute = [
+            [31.2001, 29.9187], // الإسكندرية
+            [31.5200, 31.1000], // البحر المتوسط شمال الدلتا
+            [31.2653, 32.3019], // بورسعيد
+            [30.5965, 32.2715], // الإسماعيلية
+            [30.5536, 31.7844], // التل الكبير
+            [30.0444, 31.2357], // القاهرة
+          ];
+
+          L.polyline(easternBypassRoute, {
+            color: '#C2562B',
+            weight: 5,
+            dashArray: '9, 5',
+            opacity: 0.95,
+          }).addTo(routesLayerGroup);
+
+          L.circleMarker([30.0444, 31.2357], {
+            radius: 7,
+            color: '#1B2A49',
+            fillColor: '#C2562B',
+            fillOpacity: 1,
+            weight: 2.5,
+          }).addTo(routesLayerGroup);
+        }
+      }
+    }
+
+    function getTooltipOffsetByDir(dir) {
+      if (dir === 'top') return [0, -18];
+      if (dir === 'bottom') return [0, 18];
+      if (dir === 'left') return [-18, 0];
+      return [18, 0];
+    }
+
+    function renderMapMarkers(gradeKey) {
+      markersLayerGroup.clearLayers();
+      markerObjectsMap = {};
+      const data = MAPS_DATABASE[gradeKey];
+
+      data.markers.forEach((m, idx) => {
+        const isDiscovered = state.discoveredMarkers[gradeKey].has(m.id);
+        const isActive = state.activeMarkerId === m.id;
+        const arabicNum = ARABIC_DIGITS[idx] || String(idx + 1);
+
+        const iconHtml = `
+          <div class="manara-pin-wrapper">
+            <div class="manara-pin-pulse ${isDiscovered ? 'discovered' : ''}"></div>
+            <div class="manara-pin-core ${isDiscovered ? 'discovered' : ''} ${isActive ? 'active-pin' : ''}">
+              ${arabicNum}
+            </div>
+          </div>
+        `;
+
+        const customIcon = L.divIcon({
+          html: iconHtml,
+          className: '',
+          iconSize: [36, 36],
+          iconAnchor: [18, 18],
+        });
+
+        const dir = m.labelDir || 'top';
+        const marker = L.marker(m.coords, { icon: customIcon })
+          .bindTooltip(m.tinyLabel, {
+            permanent: true,
+            direction: dir,
+            offset: getTooltipOffsetByDir(dir),
+            className: 'manara-zoom-label',
+          })
+          .bindPopup(
+            `<div class="space-y-1">
+              <div class="font-extrabold text-manaraNavy text-sm">${arabicNum}. ${m.name}</div>
+              <div class="text-xs text-slate-700">${m.curriculum}</div>
+            </div>`,
+            {
+              autoPan: true,
+              autoPanPadding: [24, 24],
+              offset: [0, -10],
+            }
+          )
+          .on('click', () => inspectMarker(m.id, true, false));
+
+        marker.addTo(markersLayerGroup);
+        markerObjectsMap[m.id] = marker;
+      });
+
+      syncZoomLabelsVisibility();
+    }
+
+    // =========================================================================
+    // 4. إدارة التفاعل مع المراحل والخطوات والمعالم
+    // =========================================================================
+    document.addEventListener('DOMContentLoaded', () => {
+      initLeafletMap();
+
+      const toggleTipsBtn = document.getElementById('toggleTipsBtn');
+      const closeTipsBtn = document.getElementById('closeTipsBtn');
+      const tipsDrawer = document.getElementById('tipsDrawer');
+
+      toggleTipsBtn.addEventListener('click', () => tipsDrawer.classList.toggle('hidden'));
+      closeTipsBtn.addEventListener('click', () => tipsDrawer.classList.add('hidden'));
+
+      document.getElementById('resetViewBtn').addEventListener('click', () => {
+        const data = MAPS_DATABASE[state.currentGrade];
+        map.flyTo(data.center, data.zoom, { duration: 0.85 });
+      });
+
+      document.querySelectorAll('.grade-tab').forEach((btn) => {
+        btn.addEventListener('click', () => selectGrade(btn.dataset.grade));
+      });
+
+      document.querySelectorAll('.step-btn').forEach((btn) => {
+        btn.addEventListener('click', () => switchStep(btn.dataset.step));
+      });
+
+      document.getElementById('timelineSlider').addEventListener('input', (e) => {
+        setTimelineState(e.target.value === '1' ? 'after' : 'before', true);
+      });
+
+      selectGrade('grade1');
+    });
+
+    function selectGrade(gradeKey) {
+      state.currentGrade = gradeKey;
+      state.timelineMode = 'before';
+      const data = MAPS_DATABASE[gradeKey];
+
+      document.querySelectorAll('.grade-tab').forEach((btn) => {
+        const isSelected = btn.dataset.grade === gradeKey;
+        if (isSelected) {
+          btn.classList.add('bg-manaraNavy', 'text-white', 'border-manaraGold', 'shadow-md');
+          btn.classList.remove('bg-manaraBg', 'text-manaraNavy', 'border-transparent', 'hover:border-slate-300');
+        } else {
+          btn.classList.remove('bg-manaraNavy', 'text-white', 'border-manaraGold', 'shadow-md');
+          btn.classList.add('bg-manaraBg', 'text-manaraNavy', 'border-transparent', 'hover:border-slate-300');
+        }
+      });
+
+      document.getElementById('stageBadge').textContent = data.badge;
+      document.getElementById('mapTitle').textContent = data.title;
+      document.getElementById('mapSubtitle').textContent = data.subtitle;
+
+      setTimeout(() => {
+        map.invalidateSize();
+        map.flyTo(data.center, data.zoom, { duration: 0.8 });
+      }, 50);
+
+      renderRoutesAndZones(gradeKey, 'before');
+      renderMapMarkers(gradeKey);
+      renderLegend();
+
+      if (data.markers.length > 0) {
+        inspectMarker(data.markers[0].id, false, false);
+      }
+
+      document.getElementById('sliderLabelBefore').textContent = data.timeline.beforeLabel;
+      document.getElementById('sliderLabelAfter').textContent = data.timeline.afterLabel;
+      document.getElementById('compassExplanation').textContent = data.timeline.compass;
+      setTimelineState('before', false);
+
+      renderQuiz();
+      switchStep('step1');
+      updateProgress();
+    }
+
+    function renderLegend() {
+      const gradeKey = state.currentGrade;
+      const data = MAPS_DATABASE[gradeKey];
+      const legendGrid = document.getElementById('legendGrid');
+      legendGrid.innerHTML = '';
+
+      data.markers.forEach((m, idx) => {
+        const isDiscovered = state.discoveredMarkers[gradeKey].has(m.id);
+        const isActive = state.activeMarkerId === m.id;
+        const arabicNum = ARABIC_DIGITS[idx] || String(idx + 1);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `text-right p-2.5 rounded-xl border text-xs font-bold transition flex items-center justify-between gap-2 ${
+          isActive
+            ? 'bg-manaraNavy/10 border-manaraGold text-manaraNavy ring-2 ring-manaraGold/40'
+            : isDiscovered
+            ? 'bg-manaraNavy/5 border-manaraNavy/30 text-manaraNavy'
+            : 'bg-white border-slate-200 text-slate-700 hover:border-manaraGold'
+        }`;
+        btn.innerHTML = `
+          <span class="flex items-center gap-2">
+            <span class="w-5 h-5 rounded-full ${
+              isDiscovered ? 'bg-manaraGold' : 'bg-manaraNavy'
+            } border border-manaraGold text-white text-[12px] font-extrabold flex items-center justify-center shrink-0">
+              ${arabicNum}
+            </span>
+            <span class="line-clamp-1">${m.name}</span>
+          </span>
+          <span class="text-[11px] ${isDiscovered ? 'text-emerald-700' : 'text-manaraGold'} shrink-0">
+            ${isDiscovered ? '✓ كُشف' : 'استكشف'}
+          </span>
+        `;
+        btn.addEventListener('click', () => inspectMarker(m.id, true, true));
+        legendGrid.appendChild(btn);
+      });
+
+      const count = state.discoveredMarkers[gradeKey].size;
+      document.getElementById('discoveredCount').textContent = `اكتشفت ${count} من ${data.markers.length} معالم`;
+    }
+
+    function inspectMarker(markerId, markDiscovered = true, flyToLocation = true) {
+      const gradeKey = state.currentGrade;
+      const data = MAPS_DATABASE[gradeKey];
+      const markerObj = data.markers.find((m) => m.id === markerId);
+      if (!markerObj) return;
+
+      state.activeMarkerId = markerId;
+
+      if (markDiscovered) {
+        state.discoveredMarkers[gradeKey].add(markerId);
+        updateProgress();
+      }
+
+      renderMapMarkers(gradeKey);
+      renderLegend();
+
+      if (flyToLocation && map) {
+        map.closePopup();
+        const targetZoom = Math.max(data.zoom + 1, 8);
+        map.flyTo(markerObj.coords, targetZoom, { duration: 0.8 });
+        if (markerObjectsMap[markerId]) {
+          markerObjectsMap[markerId].openPopup();
+        }
+      }
+
+      if (state.currentStep !== 'step1') {
+        switchStep('step1');
+      }
+
+      const idx = data.markers.findIndex((m) => m.id === markerId);
+      const arabicNum = ARABIC_DIGITS[idx] || String(idx + 1);
+      document.getElementById('detailBadge').textContent = `معلم رقم (${arabicNum}) على الخريطة`;
+      document.getElementById('detailCoords').textContent = `${markerObj.coords[0].toFixed(2)}° N, ${markerObj.coords[1].toFixed(2)}° E`;
+      document.getElementById('detailTitle').textContent = markerObj.name;
+      document.getElementById('detailCurriculum').textContent = markerObj.curriculum;
+      document.getElementById('detailCompass').textContent = markerObj.compass;
+    }
+
+    function switchStep(stepKey) {
+      state.currentStep = stepKey;
+
+      document.querySelectorAll('.step-btn').forEach((btn) => {
+        const isActive = btn.dataset.step === stepKey;
+        if (isActive) {
+          btn.classList.add('bg-manaraNavy', 'text-white', 'shadow-sm');
+          btn.classList.remove('text-slate-600', 'hover:bg-slate-100');
+        } else {
+          btn.classList.remove('bg-manaraNavy', 'text-white', 'shadow-sm');
+          btn.classList.add('text-slate-600', 'hover:bg-slate-100');
+        }
+      });
+
+      document.querySelectorAll('.step-panel').forEach((panel) => panel.classList.add('hidden'));
+      document.getElementById(`${stepKey}Panel`).classList.remove('hidden');
+
+      if (stepKey === 'step2') {
+        state.visitedTimeline[state.currentGrade] = true;
+        updateProgress();
+      }
+    }
+
+    function setTimelineState(mode, markVisited = true) {
+      state.timelineMode = mode;
+      const gradeKey = state.currentGrade;
+      const data = MAPS_DATABASE[gradeKey];
+      const info = mode === 'before' ? data.timeline.before : data.timeline.after;
+
+      document.getElementById('timelineSlider').value = mode === 'after' ? '1' : '0';
+
+      const btnBefore = document.getElementById('btnBefore');
+      const btnAfter = document.getElementById('btnAfter');
+
+      if (mode === 'before') {
+        btnBefore.className = 'flex-1 py-2 px-2.5 rounded-lg text-xs font-extrabold bg-manaraNavy text-white shadow transition';
+        btnAfter.className = 'flex-1 py-2 px-2.5 rounded-lg text-xs font-extrabold bg-white text-manaraNavy border border-slate-300 transition';
+      } else {
+        btnAfter.className = 'flex-1 py-2 px-2.5 rounded-lg text-xs font-extrabold bg-manaraGold text-white shadow transition';
+        btnBefore.className = 'flex-1 py-2 px-2.5 rounded-lg text-xs font-extrabold bg-white text-manaraNavy border border-slate-300 transition';
+      }
+
+      document.getElementById('timelinePhaseTag').textContent = info.tag;
+      document.getElementById('timelineYear').textContent = info.year;
+      document.getElementById('timelineTitle').textContent = info.title;
+      document.getElementById('timelineDesc').textContent = info.desc;
+      document.getElementById('mapPhaseBanner').textContent = `الطور المعروض: ${info.tag}`;
+
+      renderRoutesAndZones(gradeKey, mode);
+
+      if (markVisited) {
+        state.visitedTimeline[gradeKey] = true;
+        updateProgress();
+      }
+    }
+
+    // =========================================================================
+    // 5. تحدي المحقق التاريخي ووسام الإنجاز
+    // =========================================================================
+    function renderQuiz() {
+      const gradeKey = state.currentGrade;
+      const data = MAPS_DATABASE[gradeKey];
+      const qState = state.quizState[gradeKey];
+
+      const questionBox = document.getElementById('quizQuestionBox');
+      const badgeBox = document.getElementById('badgeResultBox');
+      const feedbackBox = document.getElementById('feedbackBox');
+      const nextBtn = document.getElementById('nextQuestionBtn');
+
+      if (qState.completed) {
+        questionBox.classList.add('hidden');
+        badgeBox.classList.remove('hidden');
+        document.getElementById('quizCounter').textContent = 'اكتمل التحدي ✓';
+
+        const total = data.quiz.length;
+        const score = qState.score;
+        let rankTitle = 'محقق تاريخي خبير 🏅';
+        if (score === total) {
+          rankTitle = 'كبير المحققين التاريخيين (الدرجة الكاملة) 🏆';
+        } else if (score === 0) {
+          rankTitle = 'محقق تحت التدريب — راجع الخريطة وحاول مجدداً 🧭';
+        }
+
+        document.getElementById('badgeTitle').textContent = rankTitle;
+        document.getElementById('badgeScoreText').textContent = `حصلت على ${score} من ${total} في تحليل ${data.title}`;
+        document.getElementById('badgeSummaryText').textContent =
+          'أحسنت! الربط بين التضاريس الجغرافية والمسارات الحقيقية هو مفتاح التفوق في الامتحان.';
+        document.getElementById('nextGradeBtn').textContent = `${data.nextGradeLabel} ←`;
+        return;
+      }
+
+      questionBox.classList.remove('hidden');
+      badgeBox.classList.add('hidden');
+      feedbackBox.classList.add('hidden');
+      nextBtn.classList.add('hidden');
+      qState.answered = false;
+
+      const currentQ = data.quiz[qState.index];
+      document.getElementById('quizCounter').textContent = `سؤال ${qState.index + 1} من ${data.quiz.length}`;
+      document.getElementById('questionText').textContent = currentQ.question;
+
+      const optionsContainer = document.getElementById('optionsContainer');
+      optionsContainer.innerHTML = '';
+
+      const letters = ['أ', 'ب', 'ج', 'د'];
+      currentQ.options.forEach((optText, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className =
+          'w-full text-right p-3 rounded-xl border-2 border-slate-200 hover:border-manaraNavy bg-manaraBg hover:bg-white text-xs sm:text-sm font-bold text-manaraNavy transition flex items-start gap-2.5';
+        btn.innerHTML = `
+          <span class="w-6 h-6 rounded-lg bg-manaraNavy text-white text-xs font-extrabold flex items-center justify-center shrink-0 mt-0.5">
+            ${letters[idx]}
+          </span>
+          <span class="leading-relaxed">${optText}</span>
+        `;
+        btn.addEventListener('click', () => handleAnswer(idx));
+        optionsContainer.appendChild(btn);
+      });
+    }
+
+    function handleAnswer(selectedIdx) {
+      const gradeKey = state.currentGrade;
+      const data = MAPS_DATABASE[gradeKey];
+      const qState = state.quizState[gradeKey];
+      if (qState.answered) return;
+
+      qState.answered = true;
+      const currentQ = data.quiz[qState.index];
+      const isCorrect = selectedIdx === currentQ.correct;
+
+      if (isCorrect) {
+        qState.score += 1;
+      }
+
+      const optionBtns = document.getElementById('optionsContainer').querySelectorAll('button');
+      optionBtns.forEach((btn, idx) => {
+        btn.disabled = true;
+        btn.classList.remove('hover:border-manaraNavy', 'hover:bg-white');
+        if (idx === currentQ.correct) {
+          btn.classList.remove('border-slate-200', 'bg-manaraBg');
+          btn.classList.add('border-emerald-600', 'bg-emerald-50', 'text-emerald-950');
+        } else if (idx === selectedIdx && !isCorrect) {
+          btn.classList.remove('border-slate-200', 'bg-manaraBg');
+          btn.classList.add('border-rose-600', 'bg-rose-50', 'text-rose-950');
+        } else {
+          btn.classList.add('opacity-60');
+        }
+      });
+
+      const feedbackBox = document.getElementById('feedbackBox');
+      const feedbackHeader = document.getElementById('feedbackHeader');
+      const feedbackHint = document.getElementById('feedbackHint');
+
+      feedbackBox.classList.remove(
+        'hidden',
+        'bg-emerald-50',
+        'border-emerald-300',
+        'text-emerald-900',
+        'bg-amber-50',
+        'border-amber-300',
+        'text-amber-950'
+      );
+
+      if (isCorrect) {
+        feedbackBox.classList.add('bg-emerald-50', 'border', 'border-emerald-300', 'text-emerald-900');
+        feedbackHeader.textContent = '✓ تحليل دقيق! إجابة صحيحة';
+      } else {
+        feedbackBox.classList.add('bg-amber-50', 'border', 'border-amber-300', 'text-amber-950');
+        feedbackHeader.textContent = '🧭 راجع البوصلة المكانية — الإجابة الصحيحة موضحة بالأخضر';
+      }
+      feedbackHint.textContent = `💡 فكرة الحل: ${currentQ.hint}`;
+
+      const nextBtn = document.getElementById('nextQuestionBtn');
+      nextBtn.classList.remove('hidden');
+      nextBtn.textContent =
+        qState.index + 1 < data.quiz.length ? 'السؤال التالي ←' : 'عرض وسام المحقق التاريخي 🏅';
+    }
+
+    function nextQuestion() {
+      const gradeKey = state.currentGrade;
+      const data = MAPS_DATABASE[gradeKey];
+      const qState = state.quizState[gradeKey];
+
+      if (qState.index + 1 < data.quiz.length) {
+        qState.index += 1;
+      } else {
+        qState.completed = true;
+        updateProgress();
+      }
+      renderQuiz();
+    }
+
+    function resetCurrentQuiz() {
+      const gradeKey = state.currentGrade;
+      state.quizState[gradeKey] = { index: 0, score: 0, answered: false, completed: false };
+      document.getElementById('copyToast').classList.add('hidden');
+      renderQuiz();
+      updateProgress();
+    }
+
+    function goToNextGrade() {
+      selectGrade(MAPS_DATABASE[state.currentGrade].nextGrade);
+    }
+
+    function updateProgress() {
+      const gradeKey = state.currentGrade;
+      let completedSteps = 0;
+
+      if (state.discoveredMarkers[gradeKey].size >= 2) completedSteps += 1;
+      if (state.visitedTimeline[gradeKey]) completedSteps += 1;
+      if (state.quizState[gradeKey].completed) completedSteps += 1;
+
+      document.getElementById('progressText').textContent = `${completedSteps} / 3 خطوات`;
+      document.getElementById('progressBar').style.width = `${(completedSteps / 3) * 100}%`;
+    }
+
+    function copyResultText() {
+      const gradeKey = state.currentGrade;
+      const data = MAPS_DATABASE[gradeKey];
+      const qState = state.quizState[gradeKey];
+      const shareText = `🏅 حصلت على وسام المحقق التاريخي في «مختبر تحليل الخرائط التفاعلي» — أكاديمية المنارة التعليمية!\n📍 المرحلة: ${data.badge}\n🗺️ الخريطة: ${data.title}\n⭐ النتيجة: ${qState.score} من ${data.quiz.length}\n#المنارة_التعليمية #هنذاكر_تاريخ_سوا`;
+
+      const tempInput = document.createElement('textarea');
+      tempInput.value = shareText;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      try {
+        document.execCommand('copy');
+        document.getElementById('copyToast').classList.remove('hidden');
+      } catch (err) {
+        // تجاهل في حال تعذر النسخ
+      }
+      document.body.removeChild(tempInput);
+    }
+  </script>
+</body>
+</html>
